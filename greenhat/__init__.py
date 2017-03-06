@@ -44,8 +44,8 @@ class Frame:
         bitmark = 1 << offset_id
         if not self.received & bitmark:
             self.received |= bitmark
-            self.buffer[offset_id * WSIZE:offset_id * WSIZE + 1] = \
-                data[:WSIZE]
+            offset = offset_id * WSIZE
+            self.buffer[offset:offset + WSIZE] = data[:WSIZE]
             self.size = len(data) + offset_id * WSIZE
 
     def id_diff(self, other_id):
@@ -86,7 +86,6 @@ class Channel:
             self.last_frame.handle_packet(*args)
         else:
             logging.warning('dropping packet %i-%i', frame_id, offset_id)
-            print('Dropping packet')
         return retval
 
 
