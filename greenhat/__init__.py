@@ -1,6 +1,8 @@
 import enum
+import struct
 import socket
 import logging
+import itertools
 
 
 logger = logging.getLogger(__name__)
@@ -42,7 +44,7 @@ class Frame:
         bitmark = 1 << offset_id
         if not self.received & bitmark:
             self.received |= bitmark
-            self.buffer[offset_id * WSIZE : offset_id * WSIZE + 1] = \
+            self.buffer[offset_id * WSIZE:offset_id * WSIZE + 1] = \
                 data[:WSIZE]
             self.size = len(data) + offset_id * WSIZE
 
@@ -83,6 +85,7 @@ class Channel:
             self.next_frame.reset()
             self.last_frame.handle_packet(*args)
         else:
+            logging.warning('dropping packet %i-%i', frame_id, offset_id)
             print('Dropping packet')
         return retval
 
@@ -130,3 +133,68 @@ class PacketHandler:
 
     def close(self):
         self.socket.close()
+
+
+def pad(iterable, value, count):
+    return itertools.islice(
+        itertools.chain(iterable, itertools.repeat(value)), count)
+
+
+class Client:
+    struct = struct.Struct('<' + 'I' * (5 + 16))
+    port = 8000
+
+    def __init__(self, ip):
+        self.ip = ip
+        self.socket = None
+        self.current_seq = 0
+
+    def send_packet(self, type, cmd, args, data_len):
+        self.current_seq += 1000
+        data = self.struct.pack(
+            0x12345678,
+            self.current_seq,
+            type,
+            cmd,
+            *pad(args, 0, 16),
+            data_len
+        )
+        self.socket.sendall(data)
+
+    def send_empty_packet(self, cmd, *args):
+        assert len(args) < 4, len(args)
+        self.send_packet(0, cmd, args, 0)
+
+    def send_write_mem_packet(self, addr, pid, buf):
+        assert isinstance(buf, (bytes, bytearray))
+        self.send_packet(1, 10, [pid, addr], len(buf))
+        self.socket.sendall(buf)
+
+    def connect(self):
+        logger.info('connecting to tcp://%s:%d', self.ip, self.port)
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.socket.connect((self.ip, 8000))
+        logger.info('connected to tcp://%s:%d', self.ip, self.port)
+
+    def disconnect(self):
+        self.socket.close()
+        logger.info('disconnect from tcp://%s:%d', self.ip, self.port)
+
+    def remoteplay(
+            self,
+            screen_priority=1,
+            priority_factor=5,
+            quality=90,
+            qos=101):
+        self.connect()
+        self.send_empty_packet(
+            901, screen_priority << 8 | priority_factor,
+            quality,
+            int(qos * 1024 * 1024 / 8)
+        )
+        self.disconnect()
+
+    def patch_wifi(self):
+        self.connect()
+        self.send_write_mem_packet(0x0105AE4, 0x1a, bytes((0x70, 0x47)))
+        self.disconnect()

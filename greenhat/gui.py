@@ -1,8 +1,10 @@
 import sys
 import socket
 import threading
+import logging
 
-from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel
+from PyQt5.QtWidgets import (
+    QApplication, QMainWindow, QLabel, QLineEdit, QPushButton)
 from PyQt5.QtGui import QPalette, QPixmap, QTransform
 
 import greenhat
@@ -13,18 +15,34 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.image_label = QLabel()
         self.image_label.setBackgroundRole(QPalette.Base)
+        self.pixmap = QPixmap()
         self.setCentralWidget(self.image_label)
+
+        self.w_ip_address = QLineEdit()
+        self.w_ip_address.setPlaceholderText('IP Address')
+        self.w_connect = QPushButton()
+        self.w_connect.setText('Connect')
+        self.w_connect.clicked.connect(self.connect)
+        self.w_patch_wifi = QPushButton('Patch WiFi')
+        self.w_patch_wifi.setText('Patch WiFi')
+        self.w_patch_wifi.clicked.connect(self.patch_wifi)
+
+        self.w_toolbar = self.addToolBar('toolbar')
+        self.w_toolbar.addWidget(self.w_ip_address)
+        self.w_toolbar.addWidget(self.w_connect)
+        self.w_toolbar.addWidget(self.w_patch_wifi)
 
         self.packet_handler = greenhat.PacketHandler(timeout=0.1)
         self.thread = threading.Thread(target=self.thread_target)
         self.alive = True
         self.thread.start()
 
+        self.client = None
+
     def load_image(self, bytes):
-        pixmap = QPixmap()
-        pixmap.loadFromData(bytes)
+        self.pixmap.loadFromData(bytes)
         self.image_label.setPixmap(
-            pixmap
+            self.pixmap
             .transformed(
                 QTransform().rotate(-90)
             )
@@ -45,9 +63,30 @@ class MainWindow(QMainWindow):
                     self.load_image(image)
         self.packet_handler.close()
 
+    def get_client(self, ip) -> greenhat.Client:
+        if self.client is None or self.client.ip != ip:
+            self.client = greenhat.Client(ip=ip)
+        return self.client
 
-if __name__ == '__main__':
+    def connect(self):
+        threading.Thread(
+            target=self.get_client(self.w_ip_address.text()).remoteplay
+        ).start()
+
+    def patch_wifi(self):
+        threading.Thread(
+            target=self.get_client(self.w_ip_address.text()).patch_wifi
+        ).start()
+
+
+def main():
+    logging.basicConfig(
+        format='[%(asctime)-15s] %(message)s', level=logging.DEBUG)
     app = QApplication(sys.argv)
     main_window = MainWindow()
     main_window.show()
     sys.exit(app.exec())
+
+
+if __name__ == '__main__':
+    main()
