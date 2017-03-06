@@ -1,6 +1,7 @@
 import sys
 import socket
 import threading
+import datetime
 import logging
 
 from PyQt5.QtWidgets import (
@@ -27,10 +28,15 @@ class MainWindow(QMainWindow):
         self.w_patch_wifi.setText('Patch WiFi')
         self.w_patch_wifi.clicked.connect(self.patch_wifi)
 
+        self.w_screenshot = QPushButton()
+        self.w_screenshot.setText('Screenshot')
+        self.w_screenshot.clicked.connect(self.screenshot)
+
         self.w_toolbar = self.addToolBar('toolbar')
         self.w_toolbar.addWidget(self.w_ip_address)
         self.w_toolbar.addWidget(self.w_connect)
         self.w_toolbar.addWidget(self.w_patch_wifi)
+        self.w_toolbar.addWidget(self.w_screenshot)
 
         self.packet_handler = greenhat.PacketHandler(timeout=0.1)
         self.thread = threading.Thread(target=self.thread_target)
@@ -38,6 +44,8 @@ class MainWindow(QMainWindow):
         self.thread.start()
 
         self.client = None
+
+        self.top_image = None
 
     def load_image(self, bytes):
         self.pixmap.loadFromData(bytes)
@@ -61,6 +69,7 @@ class MainWindow(QMainWindow):
             else:
                 if image is not None and screen == greenhat.Screen.TOP:
                     self.load_image(image)
+                    self.top_image = image
         self.packet_handler.close()
 
     def get_client(self, ip) -> greenhat.Client:
@@ -77,6 +86,13 @@ class MainWindow(QMainWindow):
         threading.Thread(
             target=self.get_client(self.w_ip_address.text()).patch_wifi
         ).start()
+
+    def screenshot(self):
+        now = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S.%f')[:-3]
+        if self.top_image is not None:
+            filename = '%s-top.jpeg' % now
+            self.image_label.pixmap().save(filename, 'JPEG')
+            logging.info('image saved to %s' % filename)
 
 
 def main():
