@@ -80,7 +80,7 @@ class Channel:
                 self.last_frame.reset()
                 self.next_frame.reset()
                 self.last_frame.frame_id = frame_id + 1
-        elif last_diff < 7:
+        elif last_diff < 64:
             self.last_frame.reset()
             self.next_frame.reset()
             self.last_frame.handle_packet(*args)
@@ -90,7 +90,7 @@ class Channel:
 
 
 class PacketHandler:
-    buff_size = 8 * 1024 * 1024
+    buff_size = 4 * 1024 * 1024
 
     def __init__(self, *, timeout=None):
         '''
